@@ -1,0 +1,48 @@
+# .github/workflows/upstream-sync.yml
+# Weekly upstream sync: merge bilawalsidhu/gods-eye-view into this fork,
+# test-gate it, and push. The Oracle VM picks it up via its Monday cron
+# (plugins/world/sync-and-rebuild.sh in oaitchedji1/orden-ai-os).
+name: upstream-sync
+
+on:
+  schedule:
+    - cron: "0 6 * * 0" # Sundays 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout fork
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Merge upstream
+        run: |
+          git config user.name "orden-sync-bot"
+          git config user.email "orden-sync-bot@users.noreply.github.com"
+          git remote add upstream https://github.com/bilawalsidhu/gods-eye-view.git || true
+          git fetch upstream
+          git merge --no-edit upstream/main
+
+      - name: Setup Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Test (merge gate — fail = no push)
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Push merged main
+        run: git push origin main
